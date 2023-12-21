@@ -1,64 +1,37 @@
-const { Sequelize } = require('sequelize');
+const { Sequelize, DataTypes } = require('sequelize');
 const bcrypt = require('bcrypt');
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf } = require('telegraf');
 const Administrateur = require('../models/Administrateurs.js');
 
-const db = new Sequelize('telegram', 'root', '', {
+const db = new Sequelize('affichage', 'root', '', {
   host: 'localhost',
   dialect: 'mysql'
 });
 
-const botToken = '6458849292:AAE56GnbgRMS6kCGupexgY8yA7e79L69WxE'; // Remplacez par le token de votre bot
-const bot = new Telegraf(botToken);
+exports.register = async (req, res) => {
+  const { nom, prenom, email, password } = req.body; // Inclure nom et prenom dans la déstructuration
+  const salt = await bcrypt.genSalt();
+  const hashPassword = await bcrypt.hash(password, salt);
 
-// Commande /start
-bot.start((ctx) => {
-  // Création du clavier en ligne avec un bouton "Registre"
-  const keyboard = Markup.inlineKeyboard([
-    Markup.button.callback('Registre', 'register'),
-    Markup.button.url('Visitez notre site web', 'http://example.com'),
-  ]);
+  try {
+    await Administrateur.create({
+      nom: nom,
+      prenom: prenom,
+      email: email,
+      password: hashPassword,
+    });
 
-  // Envoi du message avec le clavier en ligne
-  ctx.reply('Bienvenue ! Choisissez une action :', keyboard);
-});
+    await sendTelegramMessage(`Nouvel administrateur enregistré :\nNom : ${nom}\nPrénom : ${prenom}\nEmail : ${email}`);
 
-// Gestionnaire de bouton "Registre"
-bot.action('register', (ctx) => {
-  ctx.reply('Veuillez fournir les informations nécessaires pour l\'enregistrement (nom, prénom, email, mot de passe).');
-});
-
-// Gestionnaire de texte pour l'enregistrement de l'administrateur
-bot.on('text', async (ctx) => {
-  const { text } = ctx.message;
-  const [nom, prenom, email, password] = text.split(' ');
-
-  if (nom && prenom && email && password) {
-    const salt = await bcrypt.genSalt();
-    const hashPassword = await bcrypt.hash(password, salt);
-
-    try {
-      await Administrateur.create({
-        nom: nom,
-        prenom: prenom,
-        email: email,
-        password: hashPassword,
-      });
-
-      await sendTelegramMessage(`Nouvel administrateur enregistré :\nNom : ${nom}\nPrénom : ${prenom}\nEmail : ${email}`);
-
-      ctx.reply('Enregistrement réussi!');
-    } catch (error) {
-      console.error(error);
-      ctx.reply('Erreur lors de l\'enregistrement.');
-    }
-  } else {
-    ctx.reply('Veuillez fournir toutes les informations nécessaires.');
+    res.json({ msg: "Enregistrement réussi" });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ msg: "Erreur lors de l'enregistrement" });
   }
-});
-
+};
 async function sendTelegramMessage(message) {
-  const chatId = '-4002352341';
+  const bot = new Telegraf('6458849292:AAE56GnbgRMS6kCGupexgY8yA7e79L69WxE'); 
+  const chatId = '-4002352341'; 
 
   try {
     await bot.telegram.sendMessage(chatId, message);
@@ -66,6 +39,3 @@ async function sendTelegramMessage(message) {
     console.error("Erreur lors de l'envoi du message Telegram:", error);
   }
 }
-
-
-bot.launch();
